@@ -1,0 +1,6 @@
+{
+  "name": "DLS Kit Studio",
+  "description": "Discover, customize, and create Dream League Soccer football kits, jerseys, and club logos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

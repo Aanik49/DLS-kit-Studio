@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">DLS Kit Studio</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_kits">Kits</string>
+    <string name="nav_create">Create</string>
+    <string name="nav_logos">Logos</string>
+    <string name="nav_profile">Profile</string>
+    <string name="search_placeholder">Search clubs, nations, leagues, seasons...</string>
+    <string name="hero_badge">2025/26 SEASON READY</string>
+    <string name="hero_title">DESIGN YOUR DREAM CLUB</string>
+    <string name="hero_subtitle">Pro 512×512 DLS UV kits, custom badges &amp; club collections.</string>
+    <string name="action_copy_url">Copy DLS URL</string>
+    <string name="action_download_dls">Export 512×512 DLS Kit</string>
+    <string name="action_download_preview">Export Jersey Preview</string>
+    <string name="action_share">Share</string>
+    <string name="action_save">Save Design</string>
+    <string name="guest_mode_label">Guest Studio Mode</string>
+    <string name="privacy_policy_summary">DLS Kit Studio stores your custom jerseys, club crests, favorites, and viewing history locally on your device using encrypted Room &amp; DataStore storage. No personal data is collected or sold. Uploaded sponsor or crest images from Photo Picker remain private on your device unless you explicitly share an exported PNG.</string>
+    <string name="about_description">DLS Kit Studio is an independent football kit &amp; crest design suite tailored for Dream League Soccer players. Generate authentic 512×512 UV-mapped DLS kit textures, design bespoke club logos, and organize club collections offline.</string>
+</resources>

@@ -567,4 +567,65 @@ class DlsKitStudioRobolectricTest {
         val updatedCircle = editedBmp.getPixel(458, 491)
         assertTrue("Updated primary circle should be green-dominant", android.graphics.Color.green(updatedCircle) > android.graphics.Color.red(updatedCircle) + 60)
     }
+
+    @Test
+    fun playerCardDatabaseHas100PlayersAndExportsAuthenticPngCards() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val players = com.example.data.remote.DlsPlayerDatabase.players
+        assertEquals("Database must have exactly 100 predefined players", 100, players.size)
+        assertEquals("All 100 player IDs must be unique", 100, players.map { it.id }.toSet().size)
+        assertTrue(players.any { it.position.group == com.example.data.model.PlayerPositionGroup.FWD })
+        assertTrue(players.any { it.position.group == com.example.data.model.PlayerPositionGroup.MID })
+        assertTrue(players.any { it.position.group == com.example.data.model.PlayerPositionGroup.DEF })
+        assertTrue(players.any { it.position.group == com.example.data.model.PlayerPositionGroup.GK })
+
+        // Verify Kylian Mbappé exact reference card stats
+        val mbappe = players.first { it.id == "p001" }
+        assertEquals(94, mbappe.rating)
+        assertEquals(95, mbappe.spe)
+        assertEquals(100, mbappe.sho)
+        assertEquals(59, mbappe.tac)
+        assertEquals(178, mbappe.heightCm)
+
+        // Render Full Stats Card PNG (1280x760) & Standalone Transparent Shield PNG (720x960)
+        val fullCard = com.example.rendering.DlsPlayerCardExporter.renderFullStatsCardBitmap(context, mbappe)
+        assertEquals(1280, fullCard.width)
+        assertEquals(760, fullCard.height)
+        assertEquals(255, android.graphics.Color.alpha(fullCard.getPixel(640, 380)))
+
+        val shieldOnly = com.example.rendering.DlsPlayerCardExporter.renderShieldOnlyBitmap(context, mbappe)
+        assertEquals(720, shieldOnly.width)
+        assertEquals(960, shieldOnly.height)
+        assertEquals("Shield PNG has transparent corner", 0, android.graphics.Color.alpha(shieldOnly.getPixel(0, 0)))
+        assertEquals("Shield PNG center is opaque", 255, android.graphics.Color.alpha(shieldOnly.getPixel(360, 480)))
+
+        // Verify Goalkeeper card renders cleanly with GKH/GKR stats across all card tiers
+        val courtois = players.first { it.position == com.example.data.model.PlayerPosition.GK }
+        com.example.data.model.PlayerCardTier.entries.forEach { tier ->
+            val gkCard = com.example.rendering.DlsPlayerCardExporter.renderFullStatsCardBitmap(
+                context,
+                courtois.copy(tier = tier)
+            )
+            assertEquals(1280, gkCard.width)
+            assertEquals(760, gkCard.height)
+        }
+
+        // UI E2E check: Open Player Card Studio from Home, search 100 players, switch tabs, verify PNG button
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_player_card_studio_card").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player_card_live_preview").assertIsDisplayed()
+        composeRule.onNodeWithTag("download_player_card_png_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("player_db_search_input").performTextInput("Haaland")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player_row_p002").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("player_card_tab_IDENTITY").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player_identity_panel").assertIsDisplayed()
+        composeRule.onNodeWithTag("player_card_tab_STATS").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player_stats_panel").assertIsDisplayed()
+        composeRule.onNodeWithTag("player_card_back_button").performClick()
+        composeRule.waitForIdle()
+    }
 }

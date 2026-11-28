@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.CloudUpload
@@ -77,6 +78,7 @@ fun HomeScreen(
     onOpenGkStudio: () -> Unit = onOpenKitCreator,
     onOpenLogoCreator: () -> Unit,
     onOpenKitUploader: () -> Unit,
+    onOpenPlayerCardStudio: () -> Unit = {},
     onUseTemplate: (CustomizationTemplate) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -331,6 +333,60 @@ fun HomeScreen(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = "Open Kit Link Generator",
                             tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("home_player_card_studio_card")
+                        .clickable(onClick = onOpenPlayerCardStudio),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.65f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Badge,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "DLS Player Card Maker • 100 Players",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Search & edit 100 stars, upload photo & download PNG card",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Open Player Card Studio",
+                            tint = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }

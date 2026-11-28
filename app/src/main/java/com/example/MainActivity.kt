@@ -64,17 +64,20 @@ import com.example.ui.screens.KitCreatorScreen
 import com.example.ui.screens.KitDetailScreen
 import com.example.ui.screens.LogoCreatorScreen
 import com.example.ui.screens.MyDesignsScreen
+import com.example.ui.screens.PlayerCardStudioScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.theme.DlsKitStudioTheme
 import com.example.ui.viewmodel.KitCreatorViewModel
 import com.example.ui.viewmodel.KitEditorTab
 import com.example.ui.viewmodel.LogoCreatorViewModel
 import com.example.ui.viewmodel.MainStudioViewModel
+import com.example.ui.viewmodel.PlayerCardViewModel
 import kotlinx.coroutines.launch
 
 private const val ROUTE_KIT_DETAIL = "kit_detail/{clubId}"
 private const val ROUTE_MY_DESIGNS = "my_designs/{initialTab}"
 private const val ROUTE_KIT_UPLOADER = "kit_uploader"
+private const val ROUTE_PLAYER_CARD_STUDIO = "player_card_studio"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,13 +104,15 @@ class MainActivity : ComponentActivity() {
                     app.preferencesDataStore
                 )
             )
+            val playerCardVm: PlayerCardViewModel = viewModel()
             val prefs by mainVm.userPreferences.collectAsStateWithLifecycle()
 
             DlsKitStudioTheme(themePreference = prefs.themePreference) {
                 DlsKitStudioRoot(
                     mainVm = mainVm,
                     kitCreatorVm = kitCreatorVm,
-                    logoCreatorVm = logoCreatorVm
+                    logoCreatorVm = logoCreatorVm,
+                    playerCardVm = playerCardVm
                 )
             }
         }
@@ -125,7 +130,8 @@ private data class NavItemMeta(
 fun DlsKitStudioRoot(
     mainVm: MainStudioViewModel,
     kitCreatorVm: KitCreatorViewModel,
-    logoCreatorVm: LogoCreatorViewModel
+    logoCreatorVm: LogoCreatorViewModel,
+    playerCardVm: PlayerCardViewModel
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -270,6 +276,7 @@ fun DlsKitStudioRoot(
                             },
                             onOpenLogoCreator = { navigateToTab(MainNavTab.LOGOS.route) },
                             onOpenKitUploader = { navController.navigate(ROUTE_KIT_UPLOADER) },
+                            onOpenPlayerCardStudio = { navController.navigate(ROUTE_PLAYER_CARD_STUDIO) },
                             onUseTemplate = { tpl ->
                                 kitCreatorVm.loadFromSpec(
                                     spec = tpl.designSpec,
@@ -408,6 +415,21 @@ fun DlsKitStudioRoot(
                                 kitCreatorVm.loadFromSpec(spec = spec, name = title)
                                 navigateToTab(MainNavTab.CREATE.route)
                             }
+                        )
+                    }
+
+                    composable(
+                        route = ROUTE_PLAYER_CARD_STUDIO,
+                        enterTransition = {
+                            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(240))
+                        },
+                        exitTransition = {
+                            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(200))
+                        }
+                    ) {
+                        PlayerCardStudioScreen(
+                            viewModel = playerCardVm,
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }

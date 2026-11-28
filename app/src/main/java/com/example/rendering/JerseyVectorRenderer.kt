@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.core.content.res.ResourcesCompat
 import com.example.R
+import com.example.data.model.ChestBadgeStyle
 import com.example.data.model.CollarStyle
 import com.example.data.model.CrestPlacement
 import com.example.data.model.JerseyDesignSpec
@@ -39,6 +40,7 @@ import com.example.data.model.JerseyTemplateFit
 import com.example.data.model.ManufacturerMark
 import com.example.data.model.ShoulderPattern
 import com.example.data.model.SidePattern
+import com.example.data.model.SleevePatchStyle
 import com.example.data.model.SleeveStyle
 import com.example.data.model.parseColorHex
 import com.example.data.model.toAndroidColorInt
@@ -80,6 +82,7 @@ fun JerseyPreviewCanvas(
     val context = LocalContext.current
     val customCrestBitmap = rememberUriImageBitmap(spec.customClubLogoUri)
     val customSponsorBitmap = rememberUriImageBitmap(spec.customSponsorLogoUri)
+    val customStickerBitmap = rememberUriImageBitmap(spec.customStickerUri)
     val athleticTypeface = remember {
         try {
             ResourcesCompat.getFont(context, R.font.barlow_condensed)
@@ -131,6 +134,7 @@ fun JerseyPreviewCanvas(
                     height = jerseyHeight,
                     customCrestBitmap = customCrestBitmap,
                     customSponsorBitmap = customSponsorBitmap,
+                    customStickerBitmap = customStickerBitmap,
                     athleticTypeface = athleticTypeface
                 )
 
@@ -157,6 +161,7 @@ private fun DrawScope.drawProMatchJersey(
     height: Float,
     customCrestBitmap: ImageBitmap?,
     customSponsorBitmap: ImageBitmap?,
+    customStickerBitmap: ImageBitmap?,
     athleticTypeface: android.graphics.Typeface?
 ) {
     val primary = parseColorHex(spec.primaryColorHex)
@@ -467,6 +472,7 @@ private fun DrawScope.drawProMatchJersey(
             third = third,
             customCrestBitmap = customCrestBitmap,
             customSponsorBitmap = customSponsorBitmap,
+            customStickerBitmap = customStickerBitmap,
             athleticTypeface = athleticTypeface
         )
     } else {
@@ -809,6 +815,14 @@ private fun DrawScope.drawJerseyPattern(
                 row++
             }
         }
+        JerseyPattern.GK_SPLATTER,
+        JerseyPattern.GK_SHATTER,
+        JerseyPattern.GK_CAMO_GRID,
+        JerseyPattern.GK_SONIC_BURST -> {
+            KitBadgeRenderer.run {
+                drawGoalkeeperPatternCompose(pattern, secondary, third, left, top, w, h)
+            }
+        }
     }
 }
 
@@ -933,6 +947,7 @@ private fun DrawScope.drawFrontBranding(
     third: Color,
     customCrestBitmap: ImageBitmap?,
     customSponsorBitmap: ImageBitmap?,
+    customStickerBitmap: ImageBitmap?,
     athleticTypeface: android.graphics.Typeface?
 ) {
     val autoContrast = computeReadableTextColor(primary, secondary, third)
@@ -941,6 +956,31 @@ private fun DrawScope.drawFrontBranding(
     val crestPrimary = spec.crestPrimaryColorHex?.let { parseColorHex(it, primary) } ?: primary
     val crestSecondary = spec.crestSecondaryColorHex?.let { parseColorHex(it, secondary) } ?: secondary
     val crestAccent = spec.crestAccentColorHex?.let { parseColorHex(it, third) } ?: third
+
+    // Competition Sleeve Patch (Right Sleeve) & Captain Armband (Left Sleeve)
+    if (spec.sleevePatch != SleevePatchStyle.NONE) {
+        KitBadgeRenderer.run {
+            drawSleevePatchCompose(
+                patch = spec.sleevePatch,
+                center = Offset(width * 0.165f, top + height * 0.34f),
+                radius = width * 0.032f
+            )
+        }
+    }
+    if (spec.captainArmbandEnabled) {
+        val bandCol = parseColorHex(spec.captainArmbandColorHex).toAndroidColorInt()
+        KitBadgeRenderer.drawCaptainArmbandAndroid(
+            canvas = drawContext.canvas.nativeCanvas,
+            rect = android.graphics.RectF(
+                width * 0.785f,
+                top + height * 0.32f,
+                width * 0.902f,
+                top + height * 0.39f
+            ),
+            bandColor = bandCol,
+            verticalC = false
+        )
+    }
 
     val chestY = top + height * 0.262f
     val brandX = when (spec.crestPlacement) {
@@ -957,7 +997,7 @@ private fun DrawScope.drawFrontBranding(
         CrestPlacement.CENTER_CHEST -> cx
         CrestPlacement.RIGHT_CHEST -> cx - width * 0.118f
     }
-    val crestSize = width * 0.092f
+    val crestSize = width * 0.068f
     if (customCrestBitmap != null) {
         drawImage(
             image = customCrestBitmap,
@@ -978,25 +1018,41 @@ private fun DrawScope.drawFrontBranding(
         }
     }
 
+    // World Champion / Trophy Chest Patch
+    if (spec.chestBadge != ChestBadgeStyle.NONE) {
+        val badgeX = if (spec.crestPlacement == CrestPlacement.CENTER_CHEST) cx + width * 0.135f else cx
+        KitBadgeRenderer.run {
+            drawChestBadgeCompose(
+                badge = spec.chestBadge,
+                center = Offset(badgeX, chestY - height * 0.006f),
+                radius = width * 0.028f
+            )
+        }
+    }
+
     val sponsorY = top + height * 0.465f
     if (customSponsorBitmap != null) {
-        val spW = width * 0.30f
-        val spH = height * 0.12f
+        val scale = spec.customSponsorScale.coerceIn(0.4f, 1.8f)
+        val spW = width * 0.30f * scale
+        val spH = height * 0.12f * scale
+        val sx = cx + spec.customSponsorOffsetX * width * 0.22f
+        val sy = sponsorY + spec.customSponsorOffsetY * height * 0.22f
         drawImage(
             image = customSponsorBitmap,
-            dstOffset = IntOffset((cx - spW / 2f).toInt(), (sponsorY - spH / 2f).toInt()),
-            dstSize = IntSize(spW.toInt(), spH.toInt())
+            dstOffset = IntOffset((sx - spW / 2f).toInt(), (sy - spH / 2f).toInt()),
+            dstSize = IntSize(spW.toInt().coerceAtLeast(1), spH.toInt().coerceAtLeast(1))
         )
     } else if (spec.sponsorText.isNotBlank()) {
-        ProCrestRenderer.drawCrispOutlinedText(
+        KitBadgeRenderer.drawStyledSponsorAndroid(
             canvas = drawContext.canvas.nativeCanvas,
-            text = spec.sponsorText.uppercase().take(18),
+            text = spec.sponsorText,
+            style = spec.sponsorStyle,
             cx = cx,
-            baselineY = sponsorY,
-            textSizePx = width * 0.052f,
+            cy = sponsorY - height * 0.014f,
+            textSizePx = width * 0.050f,
             fillColor = sponsorColor.toAndroidColorInt(),
-            typeface = athleticTypeface,
-            letterSpacingEm = 0.08f
+            accentColor = third.toAndroidColorInt(),
+            typeface = athleticTypeface
         )
     }
 
@@ -1005,11 +1061,24 @@ private fun DrawScope.drawFrontBranding(
             canvas = drawContext.canvas.nativeCanvas,
             text = spec.customText.uppercase().take(20),
             cx = cx,
-            baselineY = top + height * 0.542f,
+            baselineY = top + height * 0.562f,
             textSizePx = width * 0.029f,
             fillColor = sponsorColor.toAndroidColorInt(),
             typeface = athleticTypeface,
             letterSpacingEm = 0.10f
+        )
+    }
+
+    // Custom PNG Sticker Overlay (with live X, Y, Scale controls)
+    if (customStickerBitmap != null) {
+        val stScale = spec.customStickerScale.coerceIn(0.4f, 1.8f)
+        val stSize = width * 0.16f * stScale
+        val stX = cx + spec.customStickerOffsetX * width * 0.22f
+        val stY = top + height * (0.48f + spec.customStickerOffsetY * 0.34f)
+        drawImage(
+            image = customStickerBitmap,
+            dstOffset = IntOffset((stX - stSize / 2f).toInt(), (stY - stSize / 2f).toInt()),
+            dstSize = IntSize(stSize.toInt().coerceAtLeast(1), stSize.toInt().coerceAtLeast(1))
         )
     }
 }
@@ -1261,6 +1330,31 @@ private fun DrawScope.drawProSideProfileKit(
         val cuffH = jerseyHeight * 0.058f
         drawRect(cuffColor, Offset(cx - sleeveHalfW * 1.2f, sleeveBottomY - cuffH * 0.75f), Size(sleeveHalfW * 2.4f, cuffH * 1.4f))
         drawLine(secondary, Offset(cx - sleeveHalfW, sleeveBottomY - cuffH * 0.78f), Offset(cx + sleeveHalfW, sleeveBottomY - cuffH * 0.78f), width * 0.007f)
+
+        // Side-profile Sleeve Competition Patch (Right side) & Captain Armband (Left side)
+        if (!isLeftSide && spec.sleevePatch != SleevePatchStyle.NONE) {
+            KitBadgeRenderer.run {
+                drawSleevePatchCompose(
+                    patch = spec.sleevePatch,
+                    center = Offset(cx, top + jerseyHeight * 0.34f),
+                    radius = width * 0.044f
+                )
+            }
+        }
+        if (isLeftSide && spec.captainArmbandEnabled) {
+            val bandCol = parseColorHex(spec.captainArmbandColorHex).toAndroidColorInt()
+            KitBadgeRenderer.drawCaptainArmbandAndroid(
+                canvas = drawContext.canvas.nativeCanvas,
+                rect = android.graphics.RectF(
+                    cx - sleeveHalfW * 1.05f,
+                    top + jerseyHeight * 0.31f,
+                    cx + sleeveHalfW * 1.05f,
+                    top + jerseyHeight * 0.39f
+                ),
+                bandColor = bandCol,
+                verticalC = false
+            )
+        }
 
         // Sleeve cylindrical highlight
         drawRect(

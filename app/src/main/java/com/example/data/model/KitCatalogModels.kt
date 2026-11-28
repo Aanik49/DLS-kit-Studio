@@ -24,7 +24,7 @@ enum class KitSlotType(val label: String, val shortLabel: String) {
     GOALKEEPER("Goalkeeper Jersey", "GK")
 }
 
-enum class JerseyPattern(val label: String) {
+enum class JerseyPattern(val label: String, val isGoalkeeper: Boolean = false) {
     SOLID("Solid"),
     STRIPES("Center Band"),
     VERTICAL_STRIPES("Vertical Stripes"),
@@ -48,7 +48,35 @@ enum class JerseyPattern(val label: String) {
     LIGHTNING_BOLT("Electric Bolts"),
     BRUSH_SLASH("Painted Slash"),
     WAVE_RIPPLE("Stadium Wave"),
-    HEX_HONEYCOMB("Aero Hex Mesh")
+    HEX_HONEYCOMB("Aero Hex Mesh"),
+    GK_SPLATTER("GK Paint Splatter", isGoalkeeper = true),
+    GK_SHATTER("GK Prism Shatter", isGoalkeeper = true),
+    GK_CAMO_GRID("GK Digi Camo", isGoalkeeper = true),
+    GK_SONIC_BURST("GK Sonic Burst", isGoalkeeper = true)
+}
+
+enum class SponsorStyle(val label: String) {
+    CLASSIC_BOLD("Classic Bold"),
+    AERO_WINGS("Aero Wings"),
+    TECH_PILL("Tech Capsule"),
+    STAR_AIRLINES("Star Airlines"),
+    CROWN_BANK("Crown Finance"),
+    BOLT_ENERGY("Bolt Energy")
+}
+
+enum class SleevePatchStyle(val label: String) {
+    NONE("None"),
+    UCL_STARBALL("Champions Starball"),
+    PREMIER_LION("League Crown"),
+    WORLD_GLOBE("World Cup"),
+    SUPER_CUP("Super Cup")
+}
+
+enum class ChestBadgeStyle(val label: String) {
+    NONE("None"),
+    WORLD_CHAMPION_GOLD("World Champ Gold"),
+    CLUB_WORLD_SHIELD("Club World"),
+    CONTINENTAL_TROPHY("Champions Cup")
 }
 
 enum class CollarStyle(val label: String) {
@@ -128,12 +156,25 @@ data class JerseyDesignSpec(
     val crestPlacement: CrestPlacement = CrestPlacement.LEFT_CHEST,
     val manufacturer: ManufacturerMark = ManufacturerMark.STRIKER_SWOOSH,
     val sponsorText: String = "APEX ENERGY",
+    val sponsorStyle: SponsorStyle = SponsorStyle.CLASSIC_BOLD,
     val customText: String = "",
     val playerName: String = "SILVA",
     val playerNumber: String = "10",
     val templateFit: JerseyTemplateFit = JerseyTemplateFit.PRO_AERO,
     val customClubLogoUri: String? = null,
     val customSponsorLogoUri: String? = null,
+    val customSponsorOffsetX: Float = 0f,
+    val customSponsorOffsetY: Float = 0f,
+    val customSponsorScale: Float = 1f,
+    val customStickerUri: String? = null,
+    val customStickerOffsetX: Float = 0f,
+    val customStickerOffsetY: Float = 0.22f,
+    val customStickerScale: Float = 1f,
+    val sleevePatch: SleevePatchStyle = SleevePatchStyle.NONE,
+    val chestBadge: ChestBadgeStyle = ChestBadgeStyle.NONE,
+    val captainArmbandEnabled: Boolean = false,
+    val captainArmbandColorHex: String = "#FFDF00",
+    val gkGloveColorHex: String? = null,
     val shortsColorHex: String = "#0A2463",
     val socksColorHex: String = "#0A2463",
     val shortsTrimColorHex: String? = null,

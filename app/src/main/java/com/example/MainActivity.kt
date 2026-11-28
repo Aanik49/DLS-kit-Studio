@@ -67,6 +67,7 @@ import com.example.ui.screens.MyDesignsScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.theme.DlsKitStudioTheme
 import com.example.ui.viewmodel.KitCreatorViewModel
+import com.example.ui.viewmodel.KitEditorTab
 import com.example.ui.viewmodel.LogoCreatorViewModel
 import com.example.ui.viewmodel.MainStudioViewModel
 import kotlinx.coroutines.launch
@@ -251,6 +252,7 @@ fun DlsKitStudioRoot(
                             popularClubCollections = mainVm.popularClubCollections,
                             nationalTeams = mainVm.nationalTeams,
                             featuredTemplates = mainVm.featuredTemplates,
+                            gkTemplates = mainVm.gkTemplates,
                             recentlyViewed = recentlyViewed,
                             allClubs = allClubs,
                             onSearchClicked = { navigateToTab(MainNavTab.KITS.route) },
@@ -262,6 +264,10 @@ fun DlsKitStudioRoot(
                                 navigateToTab(MainNavTab.KITS.route)
                             },
                             onOpenKitCreator = { navigateToTab(MainNavTab.CREATE.route) },
+                            onOpenGkStudio = {
+                                kitCreatorVm.setActiveTab(KitEditorTab.GK_STUDIO)
+                                navigateToTab(MainNavTab.CREATE.route)
+                            },
                             onOpenLogoCreator = { navigateToTab(MainNavTab.LOGOS.route) },
                             onOpenKitUploader = { navController.navigate(ROUTE_KIT_UPLOADER) },
                             onUseTemplate = { tpl ->
@@ -397,7 +403,11 @@ fun DlsKitStudioRoot(
                         }
                     ) {
                         DlsKitUploaderScreen(
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            onImportSpecToCreator = { spec, title ->
+                                kitCreatorVm.loadFromSpec(spec = spec, name = title)
+                                navigateToTab(MainNavTab.CREATE.route)
+                            }
                         )
                     }
                 }

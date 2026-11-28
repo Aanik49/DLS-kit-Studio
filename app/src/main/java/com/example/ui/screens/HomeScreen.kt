@@ -67,12 +67,14 @@ fun HomeScreen(
     popularClubCollections: List<ClubKitBundle>,
     nationalTeams: List<ClubKitBundle>,
     featuredTemplates: List<CustomizationTemplate>,
+    gkTemplates: List<CustomizationTemplate> = emptyList(),
     recentlyViewed: List<RecentlyViewedEntity>,
     allClubs: List<ClubKitBundle>,
     onSearchClicked: () -> Unit,
     onClubSelected: (ClubKitBundle) -> Unit,
     onSeeAllFilter: (CatalogSpecialFilter) -> Unit,
     onOpenKitCreator: () -> Unit,
+    onOpenGkStudio: () -> Unit = onOpenKitCreator,
     onOpenLogoCreator: () -> Unit,
     onOpenKitUploader: () -> Unit,
     onUseTemplate: (CustomizationTemplate) -> Unit,
@@ -312,13 +314,13 @@ fun HomeScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Upload DLS 26 Kit → Get Live URL",
+                                text = "Import DLS 26 Kit → Reverse Edit & Link",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Host official 512×512 PNG & copy link for Custom Kit",
+                                text = "Extract palette, re-tint, stamp crest/sponsor & host 512×512 PNG",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -386,11 +388,12 @@ fun HomeScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 StudioSectionHeader(
-                    title = copy.templatesTitle,
+                    title = "${copy.templatesTitle} (${featuredTemplates.size})",
                     actionLabel = "Studio",
                     onActionClick = onOpenKitCreator
                 )
                 LazyRow(
+                    modifier = Modifier.testTag("featured_templates_row"),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -399,6 +402,31 @@ fun HomeScreen(
                             template = tpl,
                             onClick = { onUseTemplate(tpl) }
                         )
+                    }
+                }
+            }
+        }
+
+        // Goalkeeper Studio Templates
+        if (gkTemplates.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StudioSectionHeader(
+                        title = "GK STUDIO • KEEPER KITS (${gkTemplates.size})",
+                        actionLabel = "GK Studio",
+                        onActionClick = onOpenGkStudio
+                    )
+                    LazyRow(
+                        modifier = Modifier.testTag("home_gk_templates_row"),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(gkTemplates, key = { it.id }) { tpl ->
+                            TemplateHorizontalCard(
+                                template = tpl,
+                                onClick = { onUseTemplate(tpl) }
+                            )
+                        }
                     }
                 }
             }

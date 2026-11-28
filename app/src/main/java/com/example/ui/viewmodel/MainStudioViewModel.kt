@@ -53,6 +53,7 @@ class MainStudioViewModel(
 
     val allClubs: StateFlow<List<ClubKitBundle>> = catalogRepo.clubs
     val featuredTemplates: List<CustomizationTemplate> = catalogRepo.templates
+    val gkTemplates: List<CustomizationTemplate> = catalogRepo.gkTemplates
     val logoTemplates: List<LogoTemplatePreset> = catalogRepo.logoTemplates
 
     val trendingClubs: List<ClubKitBundle> = catalogRepo.getTrendingClubs()

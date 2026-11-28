@@ -141,6 +141,57 @@ class DlsKitStudioRobolectricTest {
     }
 
     @Test
+    fun dlsColorProfileSyncMapsJerseyAndShortsAccuratelyAndReducesFrontCrestSize() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val spec = JerseyDesignSpec(
+            clubName = "Sync FC",
+            pattern = com.example.data.model.JerseyPattern.SOLID,
+            primaryColorHex = "#00529F",
+            secondaryColorHex = "#FFFFFF",
+            thirdColorHex = "#FFDF00",
+            shortsColorHex = "#111827",
+            shortsTrimColorHex = "#FFDF00",
+            socksColorHex = "#00529F",
+            playerNumberColorHex = "#FFDF00",
+            shortsNumberColorHex = "#FFFFFF",
+            crestStyleId = com.example.rendering.ClubCrestStyle.ROYAL_CROWN_RING.name,
+            crestPrimaryColorHex = "#FFDF00",
+            crestSecondaryColorHex = "#D70022",
+            crestAccentColorHex = "#FFFFFF"
+        )
+        val profile = com.example.rendering.DlsColorProfileSync.buildOfficialProfile(spec)
+
+        // Jersey & shorts fabric slots calibrated for DLS 26 Unity shader; number decals preserved in exact sRGB
+        assertEquals("#00529F", profile.jerseyPrimary.sourceHex)
+        assertEquals("#001A63", profile.jerseyPrimary.dlsTextureHex)
+        assertEquals(profile.jerseyPrimary.dlsTextureColorInt, profile.primaryIndicatorCircle.dlsTextureColorInt)
+        assertEquals("#111827", profile.shortsPrimary.sourceHex)
+        assertEquals("#010206", profile.shortsPrimary.dlsTextureHex)
+        assertEquals("#FFDF00", profile.jerseyNumber.dlsTextureHex)
+        assertEquals("#FFFFFF", profile.shortsNumber.dlsTextureHex)
+        assertTrue(profile.formatShareableProfileText().contains("Jersey Primary"))
+        assertTrue(profile.formatShareableProfileText().contains("Shorts Primary"))
+
+        // Forward-simulated in-game dark shorts stay deep dark (< 60) instead of washing out to slate (> 95)
+        val predictedShorts = com.example.rendering.DlsColorProfileSync.predictInGameRenderedColor(
+            profile.shortsPrimary.dlsTextureColorInt
+        )
+        assertTrue("synced shorts stay deep dark in-game", android.graphics.Color.blue(predictedShorts) < 60)
+
+        // Exported UV texture uses exact synced jersey & shorts profile colors AND smaller front chest crest (radius 9.8 vs old 13.5)
+        val bmp = DlsUvTextureExporter.generateDlsUvBitmap(context, spec, includeUvGuideOverlay = false)
+        assertEquals(profile.primaryIndicatorCircle.dlsTextureColorInt, bmp.getPixel(458, 491))
+        assertEquals(profile.jerseyNumber.dlsTextureColorInt, bmp.getPixel(478, 355))
+        assertEquals(profile.shortsNumber.dlsTextureColorInt, bmp.getPixel(478, 435))
+
+        // Front chest crest center in UV is at x = 325 + 0.22 * 185 = 365.7, y = 194 - 0.16 * 168 = 167.1
+        // At 12px away from crest center (366, 155), the old 13.5px crest overlapped, whereas the reduced 9.8px crest leaves clean jersey blue!
+        val outsideReducedCrest = bmp.getPixel(366, 155)
+        assertTrue("pixel 12px from crest center is clean jersey blue, not yellow/red crest", android.graphics.Color.red(outsideReducedCrest) < 20)
+        assertTrue("pixel 12px from crest center has jersey blue channel", android.graphics.Color.blue(outsideReducedCrest) > 70)
+    }
+
+    @Test
     fun showcaseAndLogoExportersGenerateExpectedResolutions() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val showcase = StudioPreviewExporter.generateJerseyShowcaseBitmap(context, JerseyDesignSpec())
@@ -275,9 +326,21 @@ class DlsKitStudioRobolectricTest {
 
     @Test
     fun catalogCoversAllRequestedCategories() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         val clubs = SampleKitCatalog.clubs
         assertTrue(clubs.size >= 30)
         assertTrue(clubs.all { it.variants.size == 4 })
+
+        val templates = SampleKitCatalog.featuredTemplates
+        assertTrue("Expected at least 24 featured templates, got ${templates.size}", templates.size >= 24)
+        assertEquals("All featured template IDs must be unique", templates.size, templates.map { it.id }.toSet().size)
+        templates.forEach { tpl ->
+            assertTrue("Template title must not be blank", tpl.title.isNotBlank())
+            val bmp = DlsUvTextureExporter.generateDlsUvBitmap(context, tpl.designSpec, includeUvGuideOverlay = false)
+            assertEquals(512, bmp.width)
+            assertEquals(512, bmp.height)
+            assertEquals(255, android.graphics.Color.alpha(bmp.getPixel(458, 491)))
+        }
     }
 
     @Test
@@ -305,13 +368,17 @@ class DlsKitStudioRobolectricTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Brazil National Team").assertIsDisplayed()
 
-        // Navigate to Kit Creator Studio & check 360° Controls, Visual Pattern Grid, Details (no Collar/Sleeve Style), Branding (24 Crests + Separate Jersey/Shorts # Colors)
+        // Navigate to Kit Creator Studio & check 360° Controls, GK Studio, Visual Pattern Grid, Details (no Collar/Sleeve Style), Branding (24 Crests + Sponsor/Badge Gallery + Separate Jersey/Shorts # Colors), and Export (Matchday Poster)
         composeRule.onNodeWithTag("nav_tab_create").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("stage_right_chip").performScrollTo().performClick()
         composeRule.onNodeWithTag("stage_left_chip").performScrollTo().performClick()
         composeRule.onNodeWithTag("stage_front_chip").performScrollTo().performClick()
         composeRule.onNodeWithTag("stage_full_kit_chip").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("kit_tab_GK_STUDIO").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("gk_studio_panel").assertIsDisplayed()
+        composeRule.onNodeWithTag("gk_gloves_preview_card").assertIsDisplayed()
         composeRule.onNodeWithTag("kit_tab_PATTERN").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("visual_pattern_grid").assertIsDisplayed()
@@ -324,12 +391,19 @@ class DlsKitStudioRobolectricTest {
         composeRule.onNodeWithTag("crest_picker_row").assertIsDisplayed()
         composeRule.onNodeWithTag("manufacturer_color_row").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("sponsor_color_row").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("sponsor_gallery_card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("badges_and_patches_card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("custom_sticker_overlay_card").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("player_number_color_row").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("shorts_number_color_row").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("kit_tab_EXPORT").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("export_matchday_poster_button").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("kit_tab_COLORS").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("shorts_color_row").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("socks_color_row").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("dls_color_profile_sync_card").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("stage_back_chip").performScrollTo().performClick()
         composeRule.onNodeWithTag("stage_uv_chip").performScrollTo().performClick()
         composeRule.waitForIdle()
@@ -343,5 +417,154 @@ class DlsKitStudioRobolectricTest {
         composeRule.onNodeWithTag("nav_tab_profile").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("profile_my_designs_card").assertIsDisplayed()
+    }
+
+    @Test
+    fun qrCodeAndMatchdayPosterExporterGenerateValidVerticalPoster() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val testUrl = "https://files.catbox.moe/dls26kit.png"
+        val matrix = com.example.rendering.QrCodeEncoder.encode(testUrl)
+        assertTrue("QR matrix size >= 25 for URL", matrix.size >= 25)
+        // Top-left finder pattern center (3, 3) and border (0, 0) must be dark
+        assertTrue("Finder (0,0) dark", matrix.isDark(0, 0))
+        assertTrue("Finder (3,3) dark", matrix.isDark(3, 3))
+        assertTrue("Finder separator (1,1) light", !matrix.isDark(1, 1))
+
+        val qrBmp = com.example.rendering.QrCodeEncoder.renderQrBitmap(testUrl, pixelSize = 240)
+        assertEquals(240, qrBmp.width)
+        assertEquals(240, qrBmp.height)
+
+        val posterSpec = JerseyDesignSpec(
+            clubName = "Miami Stars",
+            playerName = "MESSI",
+            playerNumber = "10",
+            sponsorText = "APEX ENERGY",
+            sponsorStyle = com.example.data.model.SponsorStyle.AERO_WINGS,
+            chestBadge = com.example.data.model.ChestBadgeStyle.WORLD_CHAMPION_GOLD,
+            sleevePatch = com.example.data.model.SleevePatchStyle.UCL_STARBALL,
+            captainArmbandEnabled = true
+        )
+        val poster = com.example.rendering.MatchdayPosterExporter.generateMatchdayPosterBitmap(
+            context = context,
+            spec = posterSpec,
+            dlsKitUrl = testUrl,
+            seasonLabel = "2025/26"
+        )
+        assertEquals(1080, poster.width)
+        assertEquals(1920, poster.height)
+        assertEquals(255, android.graphics.Color.alpha(poster.getPixel(540, 960)))
+    }
+
+    @Test
+    fun goalkeeperStudioCatalogAndPatternsRenderClean512Uv() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val gkTemplates = com.example.data.remote.GoalkeeperStudioCatalog.gkTemplates
+        val neonPalettes = com.example.data.remote.GoalkeeperStudioCatalog.neonPalettes
+        assertTrue("Expected at least 8 GK templates", gkTemplates.size >= 8)
+        assertTrue("Expected at least 7 neon GK palettes", neonPalettes.size >= 7)
+        val gkPatterns = com.example.data.model.JerseyPattern.entries.filter { it.isGoalkeeper }
+        assertTrue("Expected 4 GK-specific patterns", gkPatterns.size >= 4)
+
+        gkTemplates.forEach { tpl ->
+            assertEquals(com.example.data.model.KitSlotType.GOALKEEPER, tpl.designSpec.slotType)
+            val bmp = DlsUvTextureExporter.generateDlsUvBitmap(context, tpl.designSpec, includeUvGuideOverlay = false)
+            assertEquals(512, bmp.width)
+            assertEquals(512, bmp.height)
+            assertEquals(255, android.graphics.Color.alpha(bmp.getPixel(458, 491)))
+        }
+    }
+
+    @Test
+    fun sponsorStylesPatchesAndCaptainArmbandRenderOntoDls26Uv() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val spec = JerseyDesignSpec(
+            clubName = "Europa Champions",
+            pattern = com.example.data.model.JerseyPattern.SOLID,
+            primaryColorHex = "#0B1F3A",
+            secondaryColorHex = "#FFFFFF",
+            sleeveColorHex = "#0B1F3A",
+            cuffColorHex = "#0B1F3A",
+            sponsorText = "SKYLINE",
+            sponsorStyle = com.example.data.model.SponsorStyle.TECH_PILL,
+            sponsorColorHex = "#FFFFFF",
+            chestBadge = com.example.data.model.ChestBadgeStyle.WORLD_CHAMPION_GOLD,
+            sleevePatch = com.example.data.model.SleevePatchStyle.UCL_STARBALL,
+            captainArmbandEnabled = true,
+            captainArmbandColorHex = "#FFDF00"
+        )
+        val bmp = DlsUvTextureExporter.generateDlsUvBitmap(context, spec, includeUvGuideOverlay = false)
+        assertEquals(512, bmp.width)
+        assertEquals(512, bmp.height)
+
+        // Left sleeve mid-row UV (220, 326) should contain calibrated yellow captain armband pixels!
+        var foundYellowArmband = false
+        for (x in 190..248) {
+            for (y in 310..346) {
+                val px = bmp.getPixel(x, y)
+                if (android.graphics.Color.alpha(px) > 200 &&
+                    android.graphics.Color.red(px) > 200 &&
+                    android.graphics.Color.green(px) > 140 &&
+                    android.graphics.Color.blue(px) < 60
+                ) {
+                    foundYellowArmband = true
+                    break
+                }
+            }
+            if (foundYellowArmband) break
+        }
+        assertTrue("Captain armband yellow band should render in Left Sleeve UV", foundYellowArmband)
+    }
+
+    @Test
+    fun dlsUvReverseEditorExtractsPaletteAndAppliesRetintAndOverlays() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val sourceSpec = JerseyDesignSpec(
+            clubName = "Origin FC",
+            pattern = com.example.data.model.JerseyPattern.SOLID,
+            primaryColorHex = "#D70022",
+            secondaryColorHex = "#FFFFFF",
+            sleeveColorHex = "#D70022",
+            collarColorHex = "#FFFFFF",
+            shortsColorHex = "#111827",
+            socksColorHex = "#00529F",
+            playerNumberColorHex = "#FFDF00",
+            shortsNumberColorHex = "#00E5FF"
+        )
+        val sourceBmp = DlsUvTextureExporter.generateDlsUvBitmap(context, sourceSpec, includeUvGuideOverlay = false)
+        val palette = com.example.rendering.DlsUvReverseEditor.extractPaletteFromDlsUv(context, sourceBmp)
+
+        // Exact number squares extracted cleanly
+        assertEquals("#FFDF00", palette.jerseyNumberHex)
+        assertEquals("#00E5FF", palette.shortsNumberHex)
+        // Extracted jersey primary is red-dominant
+        val extractedJerseyInt = android.graphics.Color.parseColor(palette.jerseyPrimaryHex)
+        assertTrue("Extracted jersey primary should be red-dominant", android.graphics.Color.red(extractedJerseyInt) > 150)
+
+        // Editable spec preserves extracted colors
+        val editableSpec = com.example.rendering.DlsUvReverseEditor.toEditableJerseySpec(palette, "Remixed FC")
+        assertEquals("Remixed FC", editableSpec.clubName)
+        assertEquals("#FFDF00", editableSpec.playerNumberColorHex)
+        assertEquals("#00E5FF", editableSpec.shortsNumberColorHex)
+
+        // Re-tint jersey to emerald green (#00B86B) + stamp vector crest & sponsor
+        val editedBmp = com.example.rendering.DlsUvReverseEditor.applyReverseEdits(
+            context = context,
+            source512 = sourceBmp,
+            edits = com.example.rendering.DlsUvReverseEditConfig(
+                retintJerseyHex = "#00B86B",
+                retintJerseyStrength = 0.85f,
+                retintShortsHex = "#FFFFFF",
+                overlayCrestEnabled = true,
+                overlayCrestStyleId = com.example.rendering.ClubCrestStyle.ROYAL_CROWN_RING.name,
+                overlaySponsorEnabled = true,
+                overlaySponsorText = "NOVA TECH"
+            ),
+            clubName = "Remixed FC"
+        )
+        assertEquals(512, editedBmp.width)
+        assertEquals(512, editedBmp.height)
+        // Primary color indicator circle (458, 491) updated to calibrated #00B86B green
+        val updatedCircle = editedBmp.getPixel(458, 491)
+        assertTrue("Updated primary circle should be green-dominant", android.graphics.Color.green(updatedCircle) > android.graphics.Color.red(updatedCircle) + 60)
     }
 }

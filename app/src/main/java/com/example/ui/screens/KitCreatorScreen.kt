@@ -86,10 +86,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.ClubKitBundle
 import com.example.data.model.JerseyViewAngle
+import com.example.data.model.KitSlotType
 import com.example.data.remote.DlsKitUrlPublisher
 import com.example.rendering.ClubCrestBadge
 import com.example.rendering.DlsUvTextureExporter
 import com.example.rendering.JerseyPreviewCanvas
+import com.example.rendering.KeeperGlovesPreview
+import com.example.rendering.MatchdayPosterExporter
 import com.example.rendering.StudioPreviewExporter
 import com.example.ui.viewmodel.KitCreatorViewModel
 import com.example.ui.viewmodel.KitEditorTab
@@ -112,6 +115,7 @@ fun KitCreatorScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showClubPickerSheet by remember { mutableStateOf(false) }
+    var showPosterSheet by remember { mutableStateOf(false) }
     var isGeneratingUrl by remember { mutableStateOf(false) }
     var generatedKitUrl by remember { mutableStateOf<String?>(null) }
     var generatedUrlHost by remember { mutableStateOf<String?>(null) }
@@ -143,9 +147,30 @@ fun KitCreatorScreen(
         }
     )
 
+    val customStickerPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                viewModel.setCustomStickerUri(uri.toString())
+                scope.launch { snackbarHostState.showSnackbar("Custom PNG sticker overlay applied") }
+            }
+        }
+    )
+
     val uvPreviewBitmap = remember(state.spec, state.showUvPreview) {
         if (state.showUvPreview) {
             DlsUvTextureExporter.generateDlsUvBitmap(context, state.spec, includeUvGuideOverlay = true)
+        } else null
+    }
+
+    val posterBitmap = remember(state.spec, generatedKitUrl, state.season, showPosterSheet) {
+        if (showPosterSheet) {
+            MatchdayPosterExporter.generateMatchdayPosterBitmap(
+                context = context,
+                spec = state.spec,
+                dlsKitUrl = generatedKitUrl,
+                seasonLabel = state.season
+            )
         } else null
     }
 
@@ -353,6 +378,25 @@ fun KitCreatorScreen(
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
+
+                            if (state.spec.slotType == KitSlotType.GOALKEEPER) {
+                                Surface(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(4.dp)
+                                        .testTag("stage_gk_gloves_badge"),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f))
+                                ) {
+                                    Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                                        KeeperGlovesPreview(
+                                            spec = state.spec,
+                                            modifier = Modifier.width(56.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -485,6 +529,7 @@ fun KitCreatorScreen(
                 ) {
                     when (state.activeTab) {
                         KitEditorTab.BASE -> KitBasePanel(state, viewModel)
+                        KitEditorTab.GK_STUDIO -> KitGkStudioPanel(state, viewModel)
                         KitEditorTab.COLORS -> KitColorsPanel(state, viewModel)
                         KitEditorTab.PATTERN -> Unit
                         KitEditorTab.DETAILS -> KitDetailsPanel(state, viewModel)
@@ -496,6 +541,9 @@ fun KitCreatorScreen(
                             },
                             onPickSponsorLogo = {
                                 sponsorLogoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            onPickCustomSticker = {
+                                customStickerPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             }
                         )
                         KitEditorTab.EXPORT -> KitExportPanel(
@@ -575,13 +623,70 @@ fun KitCreatorScreen(
                                 clipboard.setText(AnnotatedString(url))
                                 scope.launch { snackbarHostState.showSnackbar("Copied live DLS 26 URL to clipboard") }
                             },
-                            onOpenKitUploader = onOpenKitUploader
+                            onOpenKitUploader = onOpenKitUploader,
+                            onOpenMatchdayPoster = { showPosterSheet = true }
                         )
                     }
                 }
             }
         }
         }
+    }
+
+    if (showPosterSheet && posterBitmap != null) {
+        MatchdayPosterPreviewSheet(
+            posterBitmap = posterBitmap,
+            dlsKitUrl = generatedKitUrl,
+            isPublishingUrl = isGeneratingUrl,
+            onDismiss = { showPosterSheet = false },
+            onPublishUrlForQr = {
+                isGeneratingUrl = true
+                urlErrorMessage = null
+                scope.launch {
+                    val bmp = DlsUvTextureExporter.generateDlsUvBitmap(context, state.spec, false)
+                    val res = DlsKitUrlPublisher.publishPngForDls26(bmp, state.designName)
+                    isGeneratingUrl = false
+                    if (res.success && res.url.isNotBlank()) {
+                        generatedKitUrl = res.url
+                        generatedUrlHost = res.hostName
+                        clipboard.setText(AnnotatedString(res.url))
+                        snackbarHostState.showSnackbar("Live DLS 26 URL bound to Poster QR!")
+                    } else {
+                        urlErrorMessage = res.errorMessage ?: "Could not publish URL"
+                        snackbarHostState.showSnackbar(urlErrorMessage ?: "Upload failed")
+                    }
+                }
+            },
+            onSavePoster = {
+                scope.launch {
+                    val res = DlsUvTextureExporter.exportPngAndShareableUri(
+                        context = context,
+                        bitmap = posterBitmap,
+                        filePrefix = "${state.designName}_matchday_poster",
+                        saveToGallery = true
+                    )
+                    if (res.success) {
+                        viewModel.recordExport()
+                        snackbarHostState.showSnackbar("Matchday Poster saved to ${res.displayPath}")
+                    } else {
+                        snackbarHostState.showSnackbar(res.errorMessage ?: "Poster export failed")
+                    }
+                }
+            },
+            onSharePoster = {
+                scope.launch {
+                    val res = DlsUvTextureExporter.exportPngAndShareableUri(
+                        context = context,
+                        bitmap = posterBitmap,
+                        filePrefix = "${state.designName}_matchday_story",
+                        saveToGallery = false
+                    )
+                    res.fileUri?.let { uri ->
+                        DlsUvTextureExporter.launchShareImageIntent(context, uri, "${state.designName} Matchday Poster")
+                    }
+                }
+            }
+        )
     }
 
     if (showClubPickerSheet) {

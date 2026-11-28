@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.UserPreferencesDataStore
+import com.example.data.model.ChestBadgeStyle
 import com.example.data.model.ClubKitBundle
 import com.example.data.model.CollarStyle
 import com.example.data.model.CrestPlacement
+import com.example.data.model.CustomizationTemplate
 import com.example.data.model.JerseyDesignSpec
 import com.example.data.model.JerseyPattern
 import com.example.data.model.JerseyTemplateFit
@@ -15,7 +17,10 @@ import com.example.data.model.KitSlotType
 import com.example.data.model.ManufacturerMark
 import com.example.data.model.ShoulderPattern
 import com.example.data.model.SidePattern
+import com.example.data.model.SleevePatchStyle
 import com.example.data.model.SleeveStyle
+import com.example.data.model.SponsorStyle
+import com.example.data.remote.GkNeonPalette
 import com.example.data.repository.DesignRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,11 +30,12 @@ import kotlinx.coroutines.launch
 
 enum class KitEditorTab(val label: String) {
     BASE("Base & Fit"),
+    GK_STUDIO("GK Studio"),
     COLORS("Colors"),
     PATTERN("Pattern"),
     DETAILS("Trim & Panels"),
-    BRANDING("Brand & Back"),
-    EXPORT("Save & Export")
+    BRANDING("Brand & Badges"),
+    EXPORT("Save & Poster")
 }
 
 data class KitCreatorUiState(
@@ -231,7 +237,12 @@ class KitCreatorViewModel(
     fun setManufacturer(m: ManufacturerMark) = updateSpec { it.copy(manufacturer = m) }
     fun setManufacturerColor(hex: String?) = updateSpec { it.copy(manufacturerColorHex = hex) }
     fun setSponsorText(text: String) = updateSpec { it.copy(sponsorText = text) }
+    fun setSponsorStyle(style: SponsorStyle) = updateSpec { it.copy(sponsorStyle = style) }
     fun setSponsorColor(hex: String?) = updateSpec { it.copy(sponsorColorHex = hex) }
+    fun setSleevePatch(patch: SleevePatchStyle) = updateSpec { it.copy(sleevePatch = patch) }
+    fun setChestBadge(badge: ChestBadgeStyle) = updateSpec { it.copy(chestBadge = badge) }
+    fun setCaptainArmbandEnabled(enabled: Boolean) = updateSpec { it.copy(captainArmbandEnabled = enabled) }
+    fun setCaptainArmbandColor(hex: String) = updateSpec { it.copy(captainArmbandColorHex = hex) }
     fun setCustomText(text: String) = updateSpec { it.copy(customText = text) }
     fun setPlayerName(name: String) = updateSpec { it.copy(playerName = name) }
     fun setPlayerNumber(num: String) = updateSpec { it.copy(playerNumber = num.filter { ch -> ch.isDigit() }.take(2)) }
@@ -240,6 +251,44 @@ class KitCreatorViewModel(
     fun setCleanBackNumberBox(enabled: Boolean) = updateSpec { it.copy(cleanBackNumberBox = enabled) }
     fun setCustomClubLogoUri(uri: String?) = updateSpec { it.copy(customClubLogoUri = uri) }
     fun setCustomSponsorLogoUri(uri: String?) = updateSpec { it.copy(customSponsorLogoUri = uri) }
+    fun setCustomSponsorOffsetX(x: Float) = updateSpec { it.copy(customSponsorOffsetX = x.coerceIn(-1f, 1f)) }
+    fun setCustomSponsorOffsetY(y: Float) = updateSpec { it.copy(customSponsorOffsetY = y.coerceIn(-1f, 1f)) }
+    fun setCustomSponsorScale(scale: Float) = updateSpec { it.copy(customSponsorScale = scale.coerceIn(0.4f, 1.8f)) }
+    fun setCustomStickerUri(uri: String?) = updateSpec { it.copy(customStickerUri = uri) }
+    fun setCustomStickerOffsetX(x: Float) = updateSpec { it.copy(customStickerOffsetX = x.coerceIn(-1f, 1f)) }
+    fun setCustomStickerOffsetY(y: Float) = updateSpec { it.copy(customStickerOffsetY = y.coerceIn(-1f, 1f)) }
+    fun setCustomStickerScale(scale: Float) = updateSpec { it.copy(customStickerScale = scale.coerceIn(0.4f, 1.8f)) }
+    fun setGkGloveColor(hex: String?) = updateSpec { it.copy(gkGloveColorHex = hex) }
+
+    fun applyGkNeonPalette(palette: GkNeonPalette) = updateSpec {
+        it.copy(
+            slotType = KitSlotType.GOALKEEPER,
+            primaryColorHex = palette.primaryHex,
+            secondaryColorHex = palette.secondaryHex,
+            thirdColorHex = palette.thirdHex,
+            collarColorHex = palette.secondaryHex,
+            sleeveColorHex = palette.primaryHex,
+            cuffColorHex = palette.secondaryHex,
+            shortsColorHex = palette.shortsHex,
+            shortsTrimColorHex = palette.primaryHex,
+            socksColorHex = palette.socksHex,
+            socksTrimColorHex = palette.secondaryHex,
+            playerNumberColorHex = palette.numberHex,
+            shortsNumberColorHex = palette.primaryHex,
+            gkGloveColorHex = palette.gloveHex
+        )
+    }
+
+    fun applyGkTemplate(template: CustomizationTemplate) {
+        _uiState.update { state ->
+            state.copy(
+                designName = template.title,
+                spec = template.designSpec,
+                undoStack = (state.undoStack + state.spec).takeLast(25),
+                redoStack = emptyList()
+            )
+        }
+    }
 
     fun saveCurrentDesign(asCopy: Boolean = false, onSaved: (String) -> Unit = {}) {
         val state = _uiState.value

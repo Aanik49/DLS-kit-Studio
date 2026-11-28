@@ -22,12 +22,14 @@ import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import com.example.R
+import com.example.data.model.ChestBadgeStyle
 import com.example.data.model.CrestPlacement
 import com.example.data.model.JerseyDesignSpec
 import com.example.data.model.JerseyPattern
 import com.example.data.model.ManufacturerMark
 import com.example.data.model.ShoulderPattern
 import com.example.data.model.SidePattern
+import com.example.data.model.SleevePatchStyle
 import com.example.data.model.parseColorHex
 import com.example.data.model.toAndroidColorInt
 import kotlinx.coroutines.Dispatchers
@@ -77,23 +79,10 @@ object DlsUvTextureExporter {
     private const val REGION_SHORTS_NUM_SQ = 10
 
     /**
-     * Pre-compensates sRGB kit colors for Dream League Soccer 26's Unity Linear-space shader,
-     * which lifts custom PNG textures (~c^0.36) and washes out darks/reds/blues if exported raw.
-     * Applying gamma 2.0 (c^2) preserves pure #FFFFFF white and #000000 black exactly while making
-     * darks, reds, blues, and golds match the in-app kit preview accurately inside DLS 26.
+     * Delegates to [DlsColorProfileSync.mapColorToDlsTexture] for official DLS 26 shader calibration.
      */
-    fun calibrateColorForDls26(color: Int): Int {
-        val a = Color.alpha(color)
-        val r = calibrateChannelForDls26(Color.red(color))
-        val g = calibrateChannelForDls26(Color.green(color))
-        val b = calibrateChannelForDls26(Color.blue(color))
-        return Color.argb(a, r, g, b)
-    }
-
-    private fun calibrateChannelForDls26(channel: Int): Int {
-        val norm = channel / 255.0
-        return (norm * norm * 255.0 + 0.5).toInt().coerceIn(0, 255)
-    }
+    fun calibrateColorForDls26(color: Int): Int =
+        DlsColorProfileSync.mapColorToDlsTexture(color, DlsColorChannel.FABRIC_SURFACE)
 
     fun generateDlsUvBitmap(
         context: Context,
@@ -102,56 +91,32 @@ object DlsUvTextureExporter {
         applyDls26ColorCalibration: Boolean = true
     ): Bitmap {
         val size = 512
-        val rawPrimary = parseColorHex(spec.primaryColorHex).toAndroidColorInt()
-        val rawSecondary = parseColorHex(spec.secondaryColorHex).toAndroidColorInt()
-        val rawThird = parseColorHex(spec.thirdColorHex).toAndroidColorInt()
-        val rawGradEnd = parseColorHex(spec.gradientEndHex).toAndroidColorInt()
-        val rawCollar = parseColorHex(spec.collarColorHex).toAndroidColorInt()
-        val rawSleeve = parseColorHex(spec.sleeveColorHex).toAndroidColorInt()
-        val rawCuff = parseColorHex(spec.cuffColorHex).toAndroidColorInt()
-        val rawShorts = parseColorHex(spec.shortsColorHex).toAndroidColorInt()
-        val rawSocks = parseColorHex(spec.socksColorHex).toAndroidColorInt()
+        val colorProfile = DlsColorProfileSync.buildOfficialProfile(
+            spec = spec,
+            calibrateForDls26 = applyDls26ColorCalibration
+        )
 
-        val rawShortsTrim = spec.shortsTrimColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: rawSecondary
-        val rawSocksTrim = spec.socksTrimColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: rawSecondary
-        val autoContrast = computeReadableTextColor(
-            parseColorHex(spec.primaryColorHex),
-            parseColorHex(spec.secondaryColorHex),
-            parseColorHex(spec.thirdColorHex)
-        ).toAndroidColorInt()
-        val rawManufacturer = spec.manufacturerColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: autoContrast
-        val rawSponsor = spec.sponsorColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: autoContrast
-        // DLS 26 reads the two right-edge squad number swatches as direct flat decal colors
-        val jerseyNumberColor = spec.playerNumberColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: autoContrast
-        val shortsNumberColor = spec.shortsNumberColorHex?.let { parseColorHex(it).toAndroidColorInt() }
-            ?: spec.playerNumberColorHex?.let { parseColorHex(it).toAndroidColorInt() }
-            ?: contrastInkFor(rawShorts)
-        val rawSockBrand = spec.manufacturerColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: contrastInkFor(rawSocks)
-        val rawShortsBrand = spec.manufacturerColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: contrastInkFor(rawShorts)
-        val rawCrestPrimary = spec.crestPrimaryColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: rawPrimary
-        val rawCrestSecondary = spec.crestSecondaryColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: rawSecondary
-        val rawCrestAccent = spec.crestAccentColorHex?.let { parseColorHex(it).toAndroidColorInt() } ?: rawThird
-
-        fun cal(c: Int): Int = if (applyDls26ColorCalibration) calibrateColorForDls26(c) else c
-
-        val primary = cal(rawPrimary)
-        val secondary = cal(rawSecondary)
-        val third = cal(rawThird)
-        val gradEnd = cal(rawGradEnd)
-        val collarColor = cal(rawCollar)
-        val sleeveColor = cal(rawSleeve)
-        val cuffColor = cal(rawCuff)
-        val shortsColor = cal(rawShorts)
-        val socksColor = cal(rawSocks)
-        val shortsTrimColor = cal(rawShortsTrim)
-        val socksTrimColor = cal(rawSocksTrim)
-        val manufacturerColor = cal(rawManufacturer)
-        val sponsorColor = cal(rawSponsor)
-        val sockBrandColor = cal(rawSockBrand)
-        val shortsBrandColor = cal(rawShortsBrand)
-        val crestPrimary = cal(rawCrestPrimary)
-        val crestSecondary = cal(rawCrestSecondary)
-        val crestAccent = cal(rawCrestAccent)
+        val primary = colorProfile.jerseyPrimary.dlsTextureColorInt
+        val secondary = colorProfile.jerseySecondary.dlsTextureColorInt
+        val third = colorProfile.jerseyThird.dlsTextureColorInt
+        val gradEnd = colorProfile.jerseyGradientEnd.dlsTextureColorInt
+        val collarColor = colorProfile.collar.dlsTextureColorInt
+        val sleeveColor = colorProfile.sleeve.dlsTextureColorInt
+        val cuffColor = colorProfile.cuff.dlsTextureColorInt
+        val shortsColor = colorProfile.shortsPrimary.dlsTextureColorInt
+        val socksColor = colorProfile.socksPrimary.dlsTextureColorInt
+        val shortsTrimColor = colorProfile.shortsTrim.dlsTextureColorInt
+        val socksTrimColor = colorProfile.socksTrim.dlsTextureColorInt
+        val manufacturerColor = colorProfile.manufacturer.dlsTextureColorInt
+        val sponsorColor = colorProfile.sponsor.dlsTextureColorInt
+        val jerseyNumberColor = colorProfile.jerseyNumber.dlsTextureColorInt
+        val shortsNumberColor = colorProfile.shortsNumber.dlsTextureColorInt
+        val sockBrandColor = colorProfile.sockBrand.dlsTextureColorInt
+        val shortsBrandColor = colorProfile.shortsBrand.dlsTextureColorInt
+        val crestPrimary = colorProfile.crestPrimary.dlsTextureColorInt
+        val crestSecondary = colorProfile.crestSecondary.dlsTextureColorInt
+        val crestAccent = colorProfile.crestAccent.dlsTextureColorInt
+        val primaryIndicatorColor = colorProfile.primaryIndicatorCircle.dlsTextureColorInt
 
         val athleticTypeface = try {
             ResourcesCompat.getFont(context, R.font.barlow_condensed)
@@ -232,6 +197,7 @@ object DlsUvTextureExporter {
             layerBmp.eraseColor(Color.TRANSPARENT)
             drawMainSleevesRegion(
                 canvas = layerCanvas,
+                spec = spec,
                 sleeveColor = sleeveColor,
                 cuffColor = cuffColor,
                 accentColor = secondary,
@@ -257,7 +223,7 @@ object DlsUvTextureExporter {
 
             // Pass 5: Exact solid fills for Primary Color Circle (8) and Dual Number Squares (9 & 10)
             // Zero bleed into shorts — separated by a crisp transparent moat in the official UV mask.
-            val priRgb = primary and 0x00FFFFFF
+            val priRgb = primaryIndicatorColor and 0x00FFFFFF
             val jNumRgb = jerseyNumberColor and 0x00FFFFFF
             val sNumRgb = shortsNumberColor and 0x00FFFFFF
             for (i in 0 until total) {
@@ -287,12 +253,12 @@ object DlsUvTextureExporter {
                 context, canvas, spec, primary, secondary, third, gradEnd, collarColor,
                 crestPrimary, crestSecondary, crestAccent, manufacturerColor, sponsorColor, athleticTypeface
             )
-            drawMainSleevesRegion(canvas, sleeveColor, cuffColor, secondary, third, spec.shoulderPattern)
+            drawMainSleevesRegion(canvas, spec, sleeveColor, cuffColor, secondary, third, spec.shoulderPattern)
             drawShortsRegion(
                 context, canvas, spec, shortsColor, shortsTrimColor,
                 crestPrimary, crestSecondary, crestAccent, shortsBrandColor
             )
-            drawPrimaryColorIndicatorCircle(canvas, primary)
+            drawPrimaryColorIndicatorCircle(canvas, primaryIndicatorColor)
             drawNumberColorSquares(canvas, jerseyNumberColor, shortsNumberColor)
             applyOfficialDls26Mask(context, bmp)
         }
@@ -305,6 +271,8 @@ object DlsUvTextureExporter {
 
     @Volatile
     private var cachedRegionBytes: ByteArray? = null
+
+    internal fun getOfficialDls26RegionBytes(context: Context): ByteArray? = loadOfficialDls26RegionBytes(context)
 
     private fun loadOfficialDls26RegionBytes(context: Context): ByteArray? {
         cachedRegionBytes?.let { return it }
@@ -652,12 +620,12 @@ object DlsUvTextureExporter {
             CrestPlacement.RIGHT_CHEST -> rotFront.centerX() - rotFront.width() * 0.16f
         }
         loadBitmapFromUri(context, spec.customClubLogoUri)?.let { bmp ->
-            canvas.drawBitmap(bmp, null, RectF(crestX - 15f, chestY - 15f, crestX + 15f, chestY + 15f), null)
+            canvas.drawBitmap(bmp, null, RectF(crestX - 11f, chestY - 11f, crestX + 11f, chestY + 11f), null)
         } ?: ProCrestRenderer.drawProCrestAndroid(
             canvas = canvas,
             cx = crestX,
             cy = chestY,
-            radius = 13.5f,
+            radius = 9.8f,
             primary = crestPrimary,
             secondary = crestSecondary,
             accent = crestAccent,
@@ -665,9 +633,24 @@ object DlsUvTextureExporter {
             crestStyleId = spec.crestStyleId
         )
 
+        // World Champion / Trophy Chest Patch at center upper chest
+        if (spec.chestBadge != ChestBadgeStyle.NONE) {
+            val badgeX = if (spec.crestPlacement == CrestPlacement.CENTER_CHEST) {
+                rotFront.centerX() - rotFront.width() * 0.16f
+            } else {
+                rotFront.centerX()
+            }
+            KitBadgeRenderer.drawChestBadgeAndroid(canvas, spec.chestBadge, badgeX, chestY - 1f, 7.2f)
+        }
+
         val sponsorY = rotFront.top + rotFront.height() * 0.41f
         loadBitmapFromUri(context, spec.customSponsorLogoUri)?.let { bmp ->
-            canvas.drawBitmap(bmp, null, RectF(rotFront.centerX() - 42f, sponsorY - 14f, rotFront.centerX() + 42f, sponsorY + 14f), null)
+            val spScale = spec.customSponsorScale.coerceIn(0.4f, 1.8f)
+            val halfW = 42f * spScale
+            val halfH = 14f * spScale
+            val sx = rotFront.centerX() + spec.customSponsorOffsetX * 36f
+            val sy = sponsorY + spec.customSponsorOffsetY * 36f
+            canvas.drawBitmap(bmp, null, RectF(sx - halfW, sy - halfH, sx + halfW, sy + halfH), null)
         } ?: run {
             if (spec.sponsorText.isNotBlank()) {
                 val cleanSponsor = spec.sponsorText.uppercase().take(20)
@@ -676,15 +659,16 @@ object DlsUvTextureExporter {
                     cleanSponsor.length > 13 -> 15.5f
                     else -> 17.5f
                 }
-                ProCrestRenderer.drawCrispOutlinedText(
+                KitBadgeRenderer.drawStyledSponsorAndroid(
                     canvas = canvas,
                     text = cleanSponsor,
+                    style = spec.sponsorStyle,
                     cx = rotFront.centerX(),
-                    baselineY = sponsorY + 6f,
+                    cy = sponsorY,
                     textSizePx = sponsorSize,
                     fillColor = sponsorColor,
-                    typeface = typeface,
-                    letterSpacingEm = 0.04f
+                    accentColor = third,
+                    typeface = typeface
                 )
             }
         }
@@ -694,12 +678,21 @@ object DlsUvTextureExporter {
                 canvas = canvas,
                 text = spec.customText.uppercase().take(18),
                 cx = rotFront.centerX(),
-                baselineY = sponsorY + 23f,
+                baselineY = sponsorY + 25f,
                 textSizePx = 10.5f,
                 fillColor = sponsorColor,
                 typeface = typeface,
                 letterSpacingEm = 0.06f
             )
+        }
+
+        // Custom PNG Sticker Overlay on Front Torso UV
+        loadBitmapFromUri(context, spec.customStickerUri)?.let { stBmp ->
+            val stScale = spec.customStickerScale.coerceIn(0.4f, 1.8f)
+            val half = 15f * stScale
+            val stX = rotFront.centerX() + spec.customStickerOffsetX * 38f
+            val stY = rotFront.top + rotFront.height() * (0.46f + spec.customStickerOffsetY * 0.34f)
+            canvas.drawBitmap(stBmp, null, RectF(stX - half, stY - half, stX + half, stY + half), null)
         }
         canvas.restore()
 
@@ -741,6 +734,7 @@ object DlsUvTextureExporter {
 
     private fun drawMainSleevesRegion(
         canvas: Canvas,
+        spec: JerseyDesignSpec,
         sleeveColor: Int,
         cuffColor: Int,
         accentColor: Int,
@@ -802,6 +796,23 @@ object DlsUvTextureExporter {
                     canvas.drawRect(bodyLeft, midY - 3f, bodyRight, midY + 3f, Paint().apply { color = accentColor })
                 }
             }
+
+            // Captain Armband wraps vertically across Left Sleeve UV island (cuffOnRight == true)
+            if (cuffOnRight && spec.captainArmbandEnabled) {
+                val bandColor = parseColorHex(spec.captainArmbandColorHex).toAndroidColorInt()
+                val bandRect = RectF(cuffRect.left - 34f, rect.top, cuffRect.left - 12f, rect.bottom)
+                KitBadgeRenderer.drawCaptainArmbandAndroid(canvas, bandRect, bandColor, verticalC = true)
+            }
+
+            // Competition Sleeve Patch stamped on Right Sleeve UV island (cuffOnRight == false)
+            if (!cuffOnRight && spec.sleevePatch != SleevePatchStyle.NONE) {
+                canvas.save()
+                canvas.translate(trimRect.right + 34f, midY)
+                canvas.rotate(90f)
+                KitBadgeRenderer.drawSleevePatchAndroid(canvas, spec.sleevePatch, 0f, 0f, 12.5f)
+                canvas.restore()
+            }
+
             drawFabricWeaveOverlay(canvas, rect)
             canvas.restore()
         }
@@ -1266,6 +1277,12 @@ object DlsUvTextureExporter {
                     y += step * 0.82f
                     row++
                 }
+            }
+            JerseyPattern.GK_SPLATTER,
+            JerseyPattern.GK_SHATTER,
+            JerseyPattern.GK_CAMO_GRID,
+            JerseyPattern.GK_SONIC_BURST -> {
+                KitBadgeRenderer.drawGoalkeeperPatternAndroid(canvas, spec.pattern, secondary, third, rect.left, rect.top, w, h)
             }
         }
     }

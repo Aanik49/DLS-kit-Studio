@@ -189,7 +189,7 @@ object StudioPreviewExporter {
         canvas.save()
         canvas.clipPath(torsoPath)
         canvas.drawRect(RectF(torsoLeft - 10f, top, torsoRight + 10f, top + h), Paint().apply { color = primary })
-        drawShowcasePattern(canvas, spec.pattern, secondary, third, torsoLeft, top, torsoRight - torsoLeft, h)
+        drawShowcasePatternPublic(canvas, spec.pattern, secondary, third, torsoLeft, top, torsoRight - torsoLeft, h)
         canvas.restore()
 
         // Sleeve cuffs
@@ -268,7 +268,7 @@ object StudioPreviewExporter {
                 canvas = canvas,
                 cx = crestX,
                 cy = chestY,
-                radius = w * 0.046f,
+                radius = w * 0.034f,
                 primary = crestPrimary,
                 secondary = crestSecondary,
                 accent = crestAccent,
@@ -322,7 +322,7 @@ object StudioPreviewExporter {
         }
     }
 
-    private fun drawShowcasePattern(
+    internal fun drawShowcasePatternPublic(
         canvas: Canvas,
         pattern: JerseyPattern,
         secondary: Int,
@@ -332,6 +332,10 @@ object StudioPreviewExporter {
         w: Float,
         h: Float
     ) {
+        if (pattern.isGoalkeeper) {
+            KitBadgeRenderer.drawGoalkeeperPatternAndroid(canvas, pattern, secondary, third, left, top, w, h)
+            return
+        }
         val secPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = secondary }
         val thirdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = third }
         val cx = left + w / 2f

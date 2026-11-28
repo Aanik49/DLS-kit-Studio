@@ -34,8 +34,10 @@ import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,10 +54,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,6 +79,7 @@ import com.example.data.model.parseColorHex
 import com.example.data.model.toHexString
 import com.example.rendering.ClubCrestBadge
 import com.example.rendering.ClubCrestStyle
+import com.example.rendering.DlsColorProfileSync
 import com.example.rendering.JerseyPreviewCanvas
 import com.example.rendering.ProCrestRenderer
 import com.example.rendering.computeReadableTextColor
@@ -249,6 +256,111 @@ fun KitColorsPanel(
                     onColorSelected = viewModel::setSocksTrimColor,
                     modifier = Modifier.testTag("socks_trim_color_row")
                 )
+            }
+        }
+
+        // Live DLS 26 Official Color Profile Sync readout
+        val syncedProfile = remember(state.spec) {
+            DlsColorProfileSync.buildOfficialProfile(state.spec, calibrateForDls26 = true)
+        }
+        val clipboardManager = LocalClipboardManager.current
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dls_color_profile_sync_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Sync,
+                            contentDescription = "DLS 26 color profile synced",
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "DLS 26 Official Color Sync",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    TextButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(syncedProfile.formatShareableProfileText()))
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.testTag("copy_dls_color_profile_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ContentCopy,
+                            contentDescription = "Copy DLS color profile",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Copy", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Text(
+                    text = "Jersey & shorts colors are automatically calibrated to DLS 26's shader profile so exported 512×512 textures match in-game.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                syncedProfile.summarySlots().take(5).forEach { slot ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(slot.sourceColorInt))
+                            )
+                            Text(
+                                text = "→",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(slot.dlsTextureColorInt))
+                            )
+                            Text(
+                                text = slot.slotName,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Text(
+                            text = "${slot.dlsTextureHex} · ${slot.dlsSliderLabel}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }
@@ -462,7 +574,8 @@ fun KitBrandingPanel(
     state: KitCreatorUiState,
     viewModel: KitCreatorViewModel,
     onPickClubLogo: () -> Unit,
-    onPickSponsorLogo: () -> Unit
+    onPickSponsorLogo: () -> Unit,
+    onPickCustomSticker: () -> Unit = {}
 ) {
     val autoContrastHex = computeReadableTextColor(
         parseColorHex(state.spec.primaryColorHex),
@@ -731,6 +844,12 @@ fun KitBrandingPanel(
             modifier = Modifier.testTag("sponsor_color_row")
         )
 
+        KitSponsorAndBadgesSection(
+            state = state,
+            viewModel = viewModel,
+            onPickCustomSticker = onPickCustomSticker
+        )
+
         OutlinedTextField(
             value = state.spec.customText,
             onValueChange = viewModel::setCustomText,
@@ -900,7 +1019,8 @@ fun KitExportPanel(
     onShareKit: () -> Unit,
     onGenerateLiveDlsUrl: () -> Unit,
     onCopyLiveDlsUrl: (String) -> Unit,
-    onOpenKitUploader: () -> Unit = {}
+    onOpenKitUploader: () -> Unit = {},
+    onOpenMatchdayPoster: () -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(
@@ -950,6 +1070,21 @@ fun KitExportPanel(
             Icon(Icons.Default.GridOn, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("Export 512×512 DLS 26 UV Kit (PNG)")
+        }
+
+        Button(
+            onClick = onOpenMatchdayPoster,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("export_matchday_poster_button")
+        ) {
+            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Matchday Poster & Squad Card (QR)", fontWeight = FontWeight.Bold)
         }
 
         Row(

@@ -9,6 +9,7 @@ import com.example.data.model.CustomizationTemplate
 import com.example.data.model.KitCategory
 import com.example.data.model.LogoTemplatePreset
 import com.example.data.remote.DlsCatalogApiService
+import com.example.data.remote.GoalkeeperStudioCatalog
 import com.example.data.remote.RetrofitCatalogClient
 import com.example.data.remote.SampleKitCatalog
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ class KitCatalogRepository(
     val clubs: StateFlow<List<ClubKitBundle>> = _clubs.asStateFlow()
 
     val templates: List<CustomizationTemplate> = SampleKitCatalog.featuredTemplates
+    val gkTemplates: List<CustomizationTemplate> = GoalkeeperStudioCatalog.gkTemplates
     val logoTemplates: List<LogoTemplatePreset> = SampleKitCatalog.logoTemplates
 
     val favorites: Flow<List<FavoriteClubEntity>> = favoriteClubDao.observeAll()

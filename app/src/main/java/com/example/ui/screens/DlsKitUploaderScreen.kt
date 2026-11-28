@@ -77,8 +77,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.data.model.JerseyDesignSpec
 import com.example.data.remote.DlsKitUrlPublisher
 import com.example.rendering.DlsKitUploadAnalysis
+import com.example.rendering.DlsUvReverseEditConfig
+import com.example.rendering.DlsUvReverseEditor
 import com.example.rendering.DlsUvTextureExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -94,6 +97,7 @@ data class GeneratedUploadLinkEntry(
 @Composable
 fun DlsKitUploaderScreen(
     onBack: () -> Unit,
+    onImportSpecToCreator: (JerseyDesignSpec, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -106,6 +110,7 @@ fun DlsKitUploaderScreen(
     var applyCleanCutout by remember { mutableStateOf(false) }
     var showGuideOverlay by remember { mutableStateOf(true) }
     var kitTitleInput by remember { mutableStateOf("Custom DLS 26 Kit") }
+    var reverseEdits by remember { mutableStateOf(DlsUvReverseEditConfig()) }
 
     var isUploading by remember { mutableStateOf(false) }
     var generatedUrl by remember { mutableStateOf<String?>(null) }
@@ -119,6 +124,7 @@ fun DlsKitUploaderScreen(
         generatedUrl = null
         generatedHost = null
         errorMessage = null
+        reverseEdits = DlsUvReverseEditConfig()
         scope.launch {
             val res = withContext(Dispatchers.IO) {
                 DlsUvTextureExporter.analyzeUploadedDlsKit(context, uri)
@@ -143,8 +149,47 @@ fun DlsKitUploaderScreen(
         onResult = { uri -> handleSelectedUri(uri) }
     )
 
-    val activeBitmap = remember(analysis, applyCleanCutout) {
+    val overlayCrestPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                reverseEdits = reverseEdits.copy(
+                    overlayCrestEnabled = true,
+                    overlayCustomCrestUri = uri.toString()
+                )
+                scope.launch { snackbarHostState.showSnackbar("Custom crest PNG stamped on UV") }
+            }
+        }
+    )
+
+    val overlaySponsorPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                reverseEdits = reverseEdits.copy(
+                    overlaySponsorEnabled = true,
+                    overlayCustomSponsorUri = uri.toString()
+                )
+                scope.launch { snackbarHostState.showSnackbar("Custom sponsor PNG stamped on UV") }
+            }
+        }
+    )
+
+    val baseBitmap = remember(analysis, applyCleanCutout) {
         analysis?.let { if (applyCleanCutout) it.autoMasked512Bitmap else it.normalized512Bitmap }
+    }
+
+    val extractedPalette = remember(baseBitmap) {
+        baseBitmap?.let { DlsUvReverseEditor.extractPaletteFromDlsUv(context, it) }
+    }
+
+    val activeBitmap = remember(baseBitmap, reverseEdits, kitTitleInput) {
+        val src = baseBitmap ?: return@remember null
+        if (reverseEdits.hasAnyActiveEdit) {
+            DlsUvReverseEditor.applyReverseEdits(context, src, reverseEdits, kitTitleInput)
+        } else {
+            src
+        }
     }
 
     val displayBitmap = remember(activeBitmap, showGuideOverlay) {
@@ -163,11 +208,11 @@ fun DlsKitUploaderScreen(
                 title = {
                     Column {
                         Text(
-                            text = "DLS 26 KIT LINK GENERATOR",
+                            text = "DLS 26 KIT IMPORTER & EDITOR",
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
-                            text = "Upload official 512×512 PNG & generate game URL",
+                            text = "Import 512×512 PNG • extract palette, re-tint & get link",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -391,6 +436,50 @@ fun DlsKitUploaderScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    // Step 2B: Auto-Extracted Palette & Direct UV Reverse Editor
+                    if (extractedPalette != null) {
+                        item {
+                            DlsKitReverseEditorPanel(
+                                palette = extractedPalette,
+                                edits = reverseEdits,
+                                onEditsChange = { reverseEdits = it },
+                                onOpenPaletteInStudio = {
+                                    val editableSpec = DlsUvReverseEditor.toEditableJerseySpec(
+                                        palette = extractedPalette,
+                                        clubName = kitTitleInput
+                                    )
+                                    onImportSpecToCreator(editableSpec, kitTitleInput.ifBlank { "Imported DLS Kit" })
+                                },
+                                onPickOverlayCrest = {
+                                    overlayCrestPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                onPickOverlaySponsor = {
+                                    overlaySponsorPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                onSaveEditedPng = {
+                                    val edited = activeBitmap ?: return@DlsKitReverseEditorPanel
+                                    scope.launch {
+                                        val res = DlsUvTextureExporter.exportPngAndShareableUri(
+                                            context = context,
+                                            bitmap = edited,
+                                            filePrefix = "${kitTitleInput}_edited_dls_512",
+                                            saveToGallery = true
+                                        )
+                                        if (res.success) {
+                                            snackbarHostState.showSnackbar("Edited 512×512 DLS PNG saved to ${res.displayPath}")
+                                        } else {
+                                            snackbarHostState.showSnackbar(res.errorMessage ?: "Save failed")
+                                        }
+                                    }
+                                }
+                            )
                         }
                     }
 

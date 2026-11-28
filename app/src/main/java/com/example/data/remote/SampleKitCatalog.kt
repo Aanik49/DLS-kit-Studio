@@ -1096,7 +1096,7 @@ object SampleKitCatalog {
                 playerNumber = "11"
             )
         )
-    )
+    ) + ExpandedFeaturedTemplates.additionalTemplates
 
     val logoTemplates: List<LogoTemplatePreset> = listOf(
         LogoTemplatePreset(
